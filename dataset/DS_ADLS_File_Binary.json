@@ -1,0 +1,37 @@
+{
+	"name": "DS_ADLS_File_Binary",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AzureDataLakeStorageParquet",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"folderPath": {
+				"type": "string"
+			},
+			"fileName": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Partner Settlement Datasets"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().fileName",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().folderPath",
+					"type": "Expression"
+				},
+				"fileSystem": "settlements"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

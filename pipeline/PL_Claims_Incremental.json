@@ -1,0 +1,245 @@
+{
+	"name": "PL_Claims_Incremental",
+	"properties": {
+		"activities": [
+			{
+				"name": "LKP_OldWatermark",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "PostgreSqlV2Source",
+						"query": "SELECT watermark_value FROM watermark_table;",
+						"queryTimeout": "02:00:00"
+					},
+					"dataset": {
+						"referenceName": "ControlTable",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "LKP_NewWatermark",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LKP_OldWatermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "PostgreSqlV2Source",
+						"query": "SELECT max(updated_at) as new_watermark\nFROM public.claims;\n",
+						"queryTimeout": "02:00:00"
+					},
+					"dataset": {
+						"referenceName": "ControlTable",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "IF_HasChanges",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "LKP_NewWatermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(ticks(activity('LKP_NewWatermark').output.firstRow.new_watermark), ticks(activity('LKP_OldWatermark').output.firstRow.watermark_value))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "LKP_LogNoChnage",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "PostgreSqlV2Source",
+									"query": {
+										"value": "INSERT INTO pipeline_run_log (pipeline_name, run_id, table_name, old_watermark, new_watermark, rows_copied, status) VALUES ('@{pipeline().Pipeline}', '@{pipeline().RunId}', 'claims', '@{activity('LKP_OldWatermark').output.firstRow.watermark_value}', '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}', 0, 'NO_CHANGES') RETURNING log_id",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00"
+								},
+								"dataset": {
+									"referenceName": "ControlTable",
+									"type": "DatasetReference"
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "CP_Claimns_Incremental",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "PostgreSqlV2Source",
+									"query": {
+										"value": "SELECT *\nFROM public.claims\nwhere updated_at > '@{activity('LKP_OldWatermark').output.firstRow.watermark_value}'\nand\nupdated_at <= '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "OnPrem_Source_PostgreSql",
+									"type": "DatasetReference",
+									"parameters": {
+										"tableName": "claims"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Target_Parquet_Dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"tableName": {
+											"value": "@concat('claims_incremental/load_', formatDateTime(utcNow(),'yyyyMMddHHmmss'))",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "LKP_UpdateWatermark",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "CP_Claimns_Incremental",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "PostgreSqlV2Source",
+									"query": {
+										"value": "UPDATE watermark_table SET watermark_value = '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}' WHERE table_name = 'claims' RETURNING watermark_value",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00"
+								},
+								"dataset": {
+									"referenceName": "ControlTable",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "LKP_LogRun",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "LKP_UpdateWatermark",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "PostgreSqlV2Source",
+									"query": {
+										"value": "INSERT INTO pipeline_run_log (pipeline_name, run_id, table_name, old_watermark, new_watermark, rows_copied, status) VALUES ('@{pipeline().Pipeline}', '@{pipeline().RunId}', 'claims', '@{activity('LKP_OldWatermark').output.firstRow.watermark_value}', '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}', \r\n    @{activity('CP_Claimns_Incremental').output.rowsCopied}, 'SUCCESS') RETURNING log_id",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00"
+								},
+								"dataset": {
+									"referenceName": "ControlTable",
+									"type": "DatasetReference"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2026-10-10T05:02:32Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

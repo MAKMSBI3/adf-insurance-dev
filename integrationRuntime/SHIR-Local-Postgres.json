@@ -1,0 +1,6 @@
+{
+	"name": "SHIR-Local-Postgres",
+	"properties": {
+		"type": "SelfHosted"
+	}
+}
