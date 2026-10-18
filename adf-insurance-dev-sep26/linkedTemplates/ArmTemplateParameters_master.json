@@ -1,0 +1,66 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adf-insurance-dev-sep26"
+		},
+		"AzureDataLakeStorage_accountKey": {
+			"value": ""
+		},
+		"AzureDataLakeStorageCSV_accountKey": {
+			"value": ""
+		},
+		"AzureDataLakeStorageParquet_accountKey": {
+			"value": ""
+		},
+		"LS_CheckClaimRisk_functionKey": {
+			"value": ""
+		},
+		"conn_blob_accountKey": {
+			"value": ""
+		},
+		"AzureDataLakeStorage_properties_typeProperties_url": {
+			"value": "https://insuranceadls26.dfs.core.windows.net/"
+		},
+		"AzureDataLakeStorageCSV_properties_typeProperties_url": {
+			"value": "https://insuranceadls26.dfs.core.windows.net/"
+		},
+		"AzureDataLakeStorageParquet_properties_typeProperties_url": {
+			"value": "https://insuranceadls26.dfs.core.windows.net/"
+		},
+		"LS_AzureSQL_Finance_properties_typeProperties_server": {
+			"value": "sql-insurance-26.database.windows.net"
+		},
+		"LS_AzureSQL_Finance_properties_typeProperties_database": {
+			"value": "free-sql-db-7410058"
+		},
+		"LS_AzureSQL_Finance_properties_typeProperties_userName": {
+			"value": "sqladmin"
+		},
+		"LS_CheckClaimRisk_properties_typeProperties_functionAppUrl": {
+			"value": "https://fa-insurance-dev-bmchfgguc8dbebgu.westus3-01.azurewebsites.net"
+		},
+		"LS_KeyVault_properties_typeProperties_baseUrl": {
+			"value": "https://insurance-kv-dev.vault.azure.net/"
+		},
+		"LS_LocalPostgres_properties_typeProperties_server": {
+			"value": "localhost"
+		},
+		"LS_LocalPostgres_properties_typeProperties_database": {
+			"value": "insurance_oltp"
+		},
+		"LS_LocalPostgres_properties_typeProperties_username": {
+			"value": "postgres"
+		},
+		"conn_blob_properties_typeProperties_url": {
+			"value": "https://insurancesep26.dfs.core.windows.net/"
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}

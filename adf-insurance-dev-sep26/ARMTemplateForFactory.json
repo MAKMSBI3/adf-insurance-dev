@@ -1,0 +1,1852 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adf-insurance-dev-sep26"
+		},
+		"AzureDataLakeStorage_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'AzureDataLakeStorage'"
+		},
+		"AzureDataLakeStorageCSV_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'AzureDataLakeStorageCSV'"
+		},
+		"AzureDataLakeStorageParquet_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'AzureDataLakeStorageParquet'"
+		},
+		"LS_CheckClaimRisk_functionKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'functionKey' of 'LS_CheckClaimRisk'"
+		},
+		"conn_blob_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'conn_blob'"
+		},
+		"AzureDataLakeStorage_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://insuranceadls26.dfs.core.windows.net/"
+		},
+		"AzureDataLakeStorageCSV_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://insuranceadls26.dfs.core.windows.net/"
+		},
+		"AzureDataLakeStorageParquet_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://insuranceadls26.dfs.core.windows.net/"
+		},
+		"LS_AzureSQL_Finance_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "sql-insurance-26.database.windows.net"
+		},
+		"LS_AzureSQL_Finance_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "free-sql-db-7410058"
+		},
+		"LS_AzureSQL_Finance_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "sqladmin"
+		},
+		"LS_CheckClaimRisk_properties_typeProperties_functionAppUrl": {
+			"type": "string",
+			"defaultValue": "https://fa-insurance-dev-bmchfgguc8dbebgu.westus3-01.azurewebsites.net"
+		},
+		"LS_KeyVault_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://insurance-kv-dev.vault.azure.net/"
+		},
+		"LS_LocalPostgres_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "localhost"
+		},
+		"LS_LocalPostgres_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "insurance_oltp"
+		},
+		"LS_LocalPostgres_properties_typeProperties_username": {
+			"type": "string",
+			"defaultValue": "postgres"
+		},
+		"conn_blob_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://insurancesep26.dfs.core.windows.net/"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_Bronze_Ingetion')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LKP_GetControlTable",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "PostgreSqlV2Source",
+								"query": "SELECT table_name,target_folder FROM pipeline_control where is_active = true",
+								"queryTimeout": "02:00:00"
+							},
+							"dataset": {
+								"referenceName": "ControlTable",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "FE_LoopTable",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "LKP_GetControlTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('LKP_GetControlTable').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "Move_Insurance_Files_to_ADLS",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"queryTimeout": "02:00:00"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "OnPrem_Source_PostgreSql",
+											"type": "DatasetReference",
+											"parameters": {
+												"tableName": {
+													"value": "@item().table_name",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "Target_Parquet_Dataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"tableName": {
+													"value": "@item().table_name",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								}
+							]
+						}
+					},
+					{
+						"name": "LKP_GetClaims",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "PostgreSqlV2Source",
+								"query": "SELECT claim_id, claim_amount FROM claims",
+								"queryTimeout": "02:00:00"
+							},
+							"dataset": {
+								"referenceName": "OnPrem_Source_PostgreSql",
+								"type": "DatasetReference",
+								"parameters": {
+									"tableName": "claims"
+								}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "FE_LoopClaims",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "LKP_GetClaims",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('LKP_GetClaims').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "AF_CheckClaimRisk",
+									"type": "AzureFunctionActivity",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"functionName": "CheckClaimRisk",
+										"body": {
+											"value": "{\"claimAmount\": @{item().claim_amount}}",
+											"type": "Expression"
+										},
+										"headers": {},
+										"method": "POST"
+									},
+									"linkedServiceName": {
+										"referenceName": "LS_CheckClaimRisk",
+										"type": "LinkedServiceReference"
+									}
+								},
+								{
+									"name": "LKP_WriteRiskResult",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "AF_CheckClaimRisk",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "     INSERT INTO claim_risk_results (claim_id, claim_amount, risk_level)\n     VALUES (@{item().claim_id}, @{item().claim_amount}, '@{activity('AF_CheckClaimRisk').output.riskLevel}')\n     RETURNING result_id;",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"dataset": {
+											"referenceName": "OnPrem_Source_PostgreSql",
+											"type": "DatasetReference",
+											"parameters": {
+												"tableName": "claims"
+											}
+										},
+										"firstRowOnly": false
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-10-10T02:47:21Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ControlTable')]",
+				"[concat(variables('factoryId'), '/datasets/OnPrem_Source_PostgreSql')]",
+				"[concat(variables('factoryId'), '/datasets/Target_Parquet_Dataset')]",
+				"[concat(variables('factoryId'), '/linkedServices/LS_CheckClaimRisk')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_Claims_Incremental')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LKP_OldWatermark",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "PostgreSqlV2Source",
+								"query": "SELECT watermark_value FROM watermark_table;",
+								"queryTimeout": "02:00:00"
+							},
+							"dataset": {
+								"referenceName": "ControlTable",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "LKP_NewWatermark",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "LKP_OldWatermark",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "PostgreSqlV2Source",
+								"query": "SELECT max(updated_at) as new_watermark\nFROM public.claims;\n",
+								"queryTimeout": "02:00:00"
+							},
+							"dataset": {
+								"referenceName": "ControlTable",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "IF_HasChanges",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LKP_NewWatermark",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(ticks(activity('LKP_NewWatermark').output.firstRow.new_watermark), ticks(activity('LKP_OldWatermark').output.firstRow.watermark_value))",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LKP_LogNoChnage",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "INSERT INTO pipeline_run_log (pipeline_name, run_id, table_name, old_watermark, new_watermark, rows_copied, status) VALUES ('@{pipeline().Pipeline}', '@{pipeline().RunId}', 'claims', '@{activity('LKP_OldWatermark').output.firstRow.watermark_value}', '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}', 0, 'NO_CHANGES') RETURNING log_id",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"dataset": {
+											"referenceName": "ControlTable",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "CP_Claimns_Incremental",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "SELECT *\nFROM public.claims\nwhere updated_at > '@{activity('LKP_OldWatermark').output.firstRow.watermark_value}'\nand\nupdated_at <= '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}'",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "OnPrem_Source_PostgreSql",
+											"type": "DatasetReference",
+											"parameters": {
+												"tableName": "claims"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "Target_Parquet_Dataset",
+											"type": "DatasetReference",
+											"parameters": {
+												"tableName": {
+													"value": "@concat('claims_incremental/load_', formatDateTime(utcNow(),'yyyyMMddHHmmss'))",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "LKP_UpdateWatermark",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "CP_Claimns_Incremental",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "UPDATE watermark_table SET watermark_value = '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}' WHERE table_name = 'claims' RETURNING watermark_value",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"dataset": {
+											"referenceName": "ControlTable",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								},
+								{
+									"name": "LKP_LogRun",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "LKP_UpdateWatermark",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "INSERT INTO pipeline_run_log (pipeline_name, run_id, table_name, old_watermark, new_watermark, rows_copied, status) VALUES ('@{pipeline().Pipeline}', '@{pipeline().RunId}', 'claims', '@{activity('LKP_OldWatermark').output.firstRow.watermark_value}', '@{activity('LKP_NewWatermark').output.firstRow.new_watermark}', \r\n    @{activity('CP_Claimns_Incremental').output.rowsCopied}, 'SUCCESS') RETURNING log_id",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"dataset": {
+											"referenceName": "ControlTable",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-10-10T05:02:32Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ControlTable')]",
+				"[concat(variables('factoryId'), '/datasets/OnPrem_Source_PostgreSql')]",
+				"[concat(variables('factoryId'), '/datasets/Target_Parquet_Dataset')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_Settlement_Intake')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "UNTIL_WaitForManifest",
+						"type": "Until",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@variables('manifestFound')",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "GM_CheckManifest",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DS_ADLS_File_Binary",
+											"type": "DatasetReference",
+											"parameters": {
+												"folderPath": {
+													"value": "@concat('landing/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@concat('_MANIFEST_', formatDateTime(pipeline().parameters.runDate, 'yyyyMMdd'), '.ctl')",
+													"type": "Expression"
+												}
+											}
+										},
+										"fieldList": [
+											"exists"
+										],
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true,
+											"enablePartitionDiscovery": false
+										},
+										"formatSettings": {
+											"type": "BinaryReadSettings"
+										}
+									}
+								},
+								{
+									"name": "SV_ManifestFound",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "GM_CheckManifest",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "manifestFound",
+										"value": {
+											"value": "@activity('GM_CheckManifest').output.exists",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "WAIT_30Sec",
+									"type": "Wait",
+									"dependsOn": [
+										{
+											"activity": "SV_ManifestFound",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": {
+											"value": "@if(variables('manifestFound'), 1, 30)",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"timeout": "0.00:05:00"
+						}
+					},
+					{
+						"name": "FAIL_NoPartnerFiles",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "UNTIL_WaitForManifest",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat('Partner files not received for ', pipeline().parameters.runDate)",
+								"type": "Expression"
+							},
+							"errorCode": "NO_MANIFEST"
+						}
+					},
+					{
+						"name": "GM_ListFiles",
+						"type": "GetMetadata",
+						"dependsOn": [
+							{
+								"activity": "UNTIL_WaitForManifest",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_ADLS_Folder",
+								"type": "DatasetReference",
+								"parameters": {
+									"folderPath": {
+										"value": "@concat('landing/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+										"type": "Expression"
+									}
+								}
+							},
+							"fieldList": [
+								"childItems"
+							],
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "BinaryReadSettings"
+							}
+						}
+					},
+					{
+						"name": "FILTER_CsvFiles",
+						"type": "Filter",
+						"dependsOn": [
+							{
+								"activity": "GM_ListFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GM_ListFiles').output.childItems",
+								"type": "Expression"
+							},
+							"condition": {
+								"value": "@endswith(item().name, '.csv')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "FOREACH_File",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "FILTER_CsvFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('FILTER_CsvFiles').output.Value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "EXEC_ProcessFile",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "PL_Settlement_Intake_File",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"fileName": {
+												"value": "@item().name",
+												"type": "Expression"
+											},
+											"folderPath": {
+												"value": "@concat('landing/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "AV_ProcessedFile",
+									"type": "AppendVariable",
+									"dependsOn": [
+										{
+											"activity": "EXEC_ProcessFile",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "processedFiles",
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "SV_RunSummary",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "FOREACH_File",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "runSummary",
+							"value": {
+								"value": "@concat('Files processed: ', join(variables('processedFiles'), ', '))",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "COPY_ClaimsRef",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "SV_RunSummary",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "PostgreSqlV2Source",
+								"query": "SELECT claim_id, claim_amount, claim_status, claim_type FROM claims",
+								"queryTimeout": "02:00:00"
+							},
+							"sink": {
+								"type": "AzureSqlSink",
+								"preCopyScript": "TRUNCATE TABLE fin.claims_ref",
+								"writeBehavior": "insert",
+								"sqlWriterUseTableLock": false,
+								"disableMetricsCollection": false
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "OnPrem_Source_PostgreSql",
+								"type": "DatasetReference",
+								"parameters": {
+									"tableName": "claims"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_AzureSQL_Table",
+								"type": "DatasetReference",
+								"parameters": {
+									"schemaName": "fin",
+									"tableName": "claims_ref"
+								}
+							}
+						]
+					},
+					{
+						"name": "SP_Reconcile",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "COPY_ClaimsRef",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[fin].[usp_reconcile_settlements]",
+							"storedProcedureParameters": {
+								"file_list": {
+									"value": {
+										"value": "@join(variables('processedFiles'), ',')",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_AzureSQL_Finance",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"runDate": {
+						"type": "string",
+						"defaultValue": "2026-10-11"
+					}
+				},
+				"variables": {
+					"manifestFound": {
+						"type": "Boolean",
+						"defaultValue": false
+					},
+					"processedFiles": {
+						"type": "Array"
+					},
+					"runSummary": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-10-18T04:36:31Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_ADLS_Folder')]",
+				"[concat(variables('factoryId'), '/datasets/OnPrem_Source_PostgreSql')]",
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSQL_Table')]",
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSQL_Finance')]",
+				"[concat(variables('factoryId'), '/datasets/DS_ADLS_File_Binary')]",
+				"[concat(variables('factoryId'), '/pipelines/PL_Settlement_Intake_File')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_Settlement_Intake_File')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "SWITCH_Partner",
+						"type": "Switch",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"on": {
+								"value": "@split(pipeline().parameters.fileName, '_')[0]",
+								"type": "Expression"
+							},
+							"cases": [
+								{
+									"value": "BANK",
+									"activities": [
+										{
+											"name": "COPY_Bank",
+											"type": "Copy",
+											"dependsOn": [],
+											"policy": {
+												"timeout": "0.12:00:00",
+												"retry": 0,
+												"retryIntervalInSeconds": 30,
+												"secureOutput": false,
+												"secureInput": false
+											},
+											"userProperties": [],
+											"typeProperties": {
+												"source": {
+													"type": "DelimitedTextSource",
+													"additionalColumns": [
+														{
+															"name": "source_file",
+															"value": {
+																"value": "@pipeline().parameters.fileName",
+																"type": "Expression"
+															}
+														}
+													],
+													"storeSettings": {
+														"type": "AzureBlobFSReadSettings",
+														"recursive": true,
+														"enablePartitionDiscovery": false
+													},
+													"formatSettings": {
+														"type": "DelimitedTextReadSettings"
+													}
+												},
+												"sink": {
+													"type": "AzureSqlSink",
+													"preCopyScript": {
+														"value": "DELETE FROM stg.bank_settlement WHERE source_file = '@{pipeline().parameters.fileName}'",
+														"type": "Expression"
+													},
+													"writeBehavior": "insert",
+													"sqlWriterUseTableLock": false,
+													"disableMetricsCollection": false
+												},
+												"enableStaging": false,
+												"translator": {
+													"type": "TabularTranslator",
+													"typeConversion": true,
+													"typeConversionSettings": {
+														"allowDataTruncation": true,
+														"treatBooleanAsNumber": false
+													}
+												}
+											},
+											"inputs": [
+												{
+													"referenceName": "DS_ADLS_CSV",
+													"type": "DatasetReference",
+													"parameters": {
+														"folderPath": {
+															"value": "@pipeline().parameters.folderPath",
+															"type": "Expression"
+														},
+														"fileName": {
+															"value": "@pipeline().parameters.fileName",
+															"type": "Expression"
+														}
+													}
+												}
+											],
+											"outputs": [
+												{
+													"referenceName": "DS_AzureSQL_Table",
+													"type": "DatasetReference",
+													"parameters": {
+														"schemaName": "stg",
+														"tableName": "bank_settlement"
+													}
+												}
+											]
+										}
+									]
+								},
+								{
+									"value": "TPA",
+									"activities": [
+										{
+											"name": "COPY_Tpa",
+											"type": "Copy",
+											"dependsOn": [],
+											"policy": {
+												"timeout": "0.12:00:00",
+												"retry": 0,
+												"retryIntervalInSeconds": 30,
+												"secureOutput": false,
+												"secureInput": false
+											},
+											"userProperties": [],
+											"typeProperties": {
+												"source": {
+													"type": "DelimitedTextSource",
+													"additionalColumns": [
+														{
+															"name": "source_file",
+															"value": {
+																"value": "@pipeline().parameters.fileName",
+																"type": "Expression"
+															}
+														}
+													],
+													"storeSettings": {
+														"type": "AzureBlobFSReadSettings",
+														"recursive": true,
+														"enablePartitionDiscovery": false
+													},
+													"formatSettings": {
+														"type": "DelimitedTextReadSettings"
+													}
+												},
+												"sink": {
+													"type": "AzureSqlSink",
+													"preCopyScript": {
+														"value": "DELETE FROM stg.tpa_settlement WHERE source_file = '@{pipeline().parameters.fileName}'",
+														"type": "Expression"
+													},
+													"writeBehavior": "insert",
+													"sqlWriterUseTableLock": false,
+													"disableMetricsCollection": false
+												},
+												"enableStaging": false,
+												"translator": {
+													"type": "TabularTranslator",
+													"typeConversion": true,
+													"typeConversionSettings": {
+														"allowDataTruncation": true,
+														"treatBooleanAsNumber": false
+													}
+												}
+											},
+											"inputs": [
+												{
+													"referenceName": "DS_ADLS_CSV",
+													"type": "DatasetReference",
+													"parameters": {
+														"folderPath": {
+															"value": "@pipeline().parameters.folderPath",
+															"type": "Expression"
+														},
+														"fileName": {
+															"value": "@pipeline().parameters.fileName",
+															"type": "Expression"
+														}
+													}
+												}
+											],
+											"outputs": [
+												{
+													"referenceName": "DS_AzureSQL_Table",
+													"type": "DatasetReference",
+													"parameters": {
+														"schemaName": "stg",
+														"tableName": "tpa_settlement"
+													}
+												}
+											]
+										}
+									]
+								},
+								{
+									"value": "REPAIR",
+									"activities": [
+										{
+											"name": "COPY_Repair",
+											"type": "Copy",
+											"dependsOn": [],
+											"policy": {
+												"timeout": "0.12:00:00",
+												"retry": 0,
+												"retryIntervalInSeconds": 30,
+												"secureOutput": false,
+												"secureInput": false
+											},
+											"userProperties": [],
+											"typeProperties": {
+												"source": {
+													"type": "DelimitedTextSource",
+													"additionalColumns": [
+														{
+															"name": "source_file",
+															"value": {
+																"value": "@pipeline().parameters.fileName",
+																"type": "Expression"
+															}
+														}
+													],
+													"storeSettings": {
+														"type": "AzureBlobFSReadSettings",
+														"recursive": true,
+														"enablePartitionDiscovery": false
+													},
+													"formatSettings": {
+														"type": "DelimitedTextReadSettings"
+													}
+												},
+												"sink": {
+													"type": "AzureSqlSink",
+													"preCopyScript": {
+														"value": "DELETE FROM stg.repair_invoice WHERE source_file = '@{pipeline().parameters.fileName}'",
+														"type": "Expression"
+													},
+													"writeBehavior": "insert",
+													"sqlWriterUseTableLock": false,
+													"disableMetricsCollection": false
+												},
+												"enableStaging": false,
+												"translator": {
+													"type": "TabularTranslator",
+													"typeConversion": true,
+													"typeConversionSettings": {
+														"allowDataTruncation": true,
+														"treatBooleanAsNumber": false
+													}
+												}
+											},
+											"inputs": [
+												{
+													"referenceName": "DS_ADLS_CSV",
+													"type": "DatasetReference",
+													"parameters": {
+														"folderPath": {
+															"value": "@pipeline().parameters.folderPath",
+															"type": "Expression"
+														},
+														"fileName": {
+															"value": "@pipeline().parameters.fileName",
+															"type": "Expression"
+														}
+													}
+												}
+											],
+											"outputs": [
+												{
+													"referenceName": "DS_AzureSQL_Table",
+													"type": "DatasetReference",
+													"parameters": {
+														"schemaName": "stg",
+														"tableName": "repair_invoice"
+													}
+												}
+											]
+										}
+									]
+								}
+							],
+							"defaultActivities": [
+								{
+									"name": "COPY_ToQuarantine",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "BinarySource",
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true
+											},
+											"formatSettings": {
+												"type": "BinaryReadSettings"
+											}
+										},
+										"sink": {
+											"type": "BinarySink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											}
+										},
+										"enableStaging": false
+									},
+									"inputs": [
+										{
+											"referenceName": "DS_ADLS_File_Binary",
+											"type": "DatasetReference",
+											"parameters": {
+												"folderPath": {
+													"value": "@pipeline().parameters.folderPath",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@pipeline().parameters.fileName",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "DS_ADLS_File_Binary",
+											"type": "DatasetReference",
+											"parameters": {
+												"folderPath": {
+													"value": "@replace(pipeline().parameters.folderPath, 'landing/', 'quarantine/')",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@pipeline().parameters.fileName",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "DEL_FromLanding",
+									"type": "Delete",
+									"dependsOn": [
+										{
+											"activity": "COPY_ToQuarantine",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DS_ADLS_File_Binary",
+											"type": "DatasetReference",
+											"parameters": {
+												"folderPath": {
+													"value": "@pipeline().parameters.folderPath",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@pipeline().parameters.fileName",
+													"type": "Expression"
+												}
+											}
+										},
+										"enableLogging": false,
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true,
+											"enablePartitionDiscovery": false
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"fileName": {
+						"type": "string"
+					},
+					"folderPath": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-10-18T03:42:02Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_ADLS_File_Binary')]",
+				"[concat(variables('factoryId'), '/datasets/DS_ADLS_CSV')]",
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSQL_Table')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ControlTable')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_LocalPostgres",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Insurance Datasets"
+				},
+				"annotations": [],
+				"type": "PostgreSqlV2Table",
+				"schema": [],
+				"typeProperties": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_LocalPostgres')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ADLS_CSV')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureDataLakeStorageParquet",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"folderPath": {
+						"type": "string"
+					},
+					"fileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Partner Settlement Datasets"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folderPath",
+							"type": "Expression"
+						},
+						"fileSystem": "settlements"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorageParquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ADLS_File_Binary')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureDataLakeStorageParquet",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"folderPath": {
+						"type": "string"
+					},
+					"fileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Partner Settlement Datasets"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folderPath",
+							"type": "Expression"
+						},
+						"fileSystem": "settlements"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorageParquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ADLS_Folder')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureDataLakeStorageParquet",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"folderPath": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Partner Settlement Datasets"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": {
+							"value": "@dataset().folderPath",
+							"type": "Expression"
+						},
+						"fileSystem": "settlements"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorageParquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_AzureSQL_Table')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AzureSQL_Finance",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schemaName": {
+						"type": "string"
+					},
+					"tableName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Partner Settlement Datasets"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schemaName",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().tableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSQL_Finance')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/OnPrem_Source_PostgreSql')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_LocalPostgres",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"tableName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Insurance Datasets"
+				},
+				"annotations": [],
+				"type": "PostgreSqlV2Table",
+				"schema": [],
+				"typeProperties": {
+					"schema": "public",
+					"table": {
+						"value": "@dataset().tableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_LocalPostgres')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Target_Parquet_Dataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureDataLakeStorageParquet",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"tableName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Insurance Datasets"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().tableName",
+							"type": "Expression"
+						},
+						"folderPath": "bronze",
+						"fileSystem": "claim-datalake"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorageParquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/csv_target')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "conn_blob",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Manual"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "landing"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/conn_blob')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureDataLakeStorage')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('AzureDataLakeStorage_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('AzureDataLakeStorage_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureDataLakeStorageCSV')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('AzureDataLakeStorageCSV_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('AzureDataLakeStorageCSV_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureDataLakeStorageParquet')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('AzureDataLakeStorageParquet_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('AzureDataLakeStorageParquet_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_AzureSQL_Finance')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('LS_AzureSQL_Finance_properties_typeProperties_server')]",
+					"database": "[parameters('LS_AzureSQL_Finance_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('LS_AzureSQL_Finance_properties_typeProperties_userName')]",
+					"password": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "LS_KeyVault",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "sql-insurance-26"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_KeyVault')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_CheckClaimRisk')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureFunction",
+				"typeProperties": {
+					"functionAppUrl": "[parameters('LS_CheckClaimRisk_properties_typeProperties_functionAppUrl')]",
+					"authentication": "Anonymous",
+					"functionKey": {
+						"type": "SecureString",
+						"value": "[parameters('LS_CheckClaimRisk_functionKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_KeyVault')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('LS_KeyVault_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_LocalPostgres')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "PostgreSqlV2",
+				"typeProperties": {
+					"server": "[parameters('LS_LocalPostgres_properties_typeProperties_server')]",
+					"port": 5432,
+					"database": "[parameters('LS_LocalPostgres_properties_typeProperties_database')]",
+					"username": "[parameters('LS_LocalPostgres_properties_typeProperties_username')]",
+					"password": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "LS_KeyVault",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "postgres-local-password"
+					},
+					"sslMode": 2,
+					"authenticationType": "Basic"
+				},
+				"connectVia": {
+					"referenceName": "SHIR-Local-Postgres",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/integrationRuntimes/SHIR-Local-Postgres')]",
+				"[concat(variables('factoryId'), '/linkedServices/LS_KeyVault')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/conn_blob')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('conn_blob_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('conn_blob_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SHIR-Local-Postgres')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "SelfHosted",
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		}
+	]
+}
