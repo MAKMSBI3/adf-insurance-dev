@@ -960,6 +960,184 @@
 							"referenceName": "LS_AzureSQL_Finance",
 							"type": "LinkedServiceReference"
 						}
+					},
+					{
+						"name": "COPY_ProcessedFile",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "SP_Reconcile",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT file_name, rows_loaded, status \nFROM fin.file_audit \nWHERE file_name LIKE '%@{formatDateTime(pipeline().parameters.runDate, 'yyyyMMdd')}%'",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "DS_AzureSQL_Table",
+								"type": "DatasetReference",
+								"parameters": {
+									"schemaName": "fin",
+									"tableName": "file_audit"
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_ADLS_ControlFile",
+								"type": "DatasetReference",
+								"parameters": {
+									"folderPath": {
+										"value": "@concat('outbound/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+										"type": "Expression"
+									},
+									"fileName": {
+										"value": "@concat('_PROCESSED_', formatDateTime(pipeline().parameters.runDate, 'yyyyMMdd'), '.ctl')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "COPY_ToArchive",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "COPY_ProcessedFile",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "DS_ADLS_Folder",
+								"type": "DatasetReference",
+								"parameters": {
+									"folderPath": {
+										"value": "@concat('landing/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_ADLS_Folder",
+								"type": "DatasetReference",
+								"parameters": {
+									"folderPath": {
+										"value": "@concat('archive/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "DEL_Landing",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "COPY_ToArchive",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_ADLS_Folder",
+								"type": "DatasetReference",
+								"parameters": {
+									"folderPath": {
+										"value": "@concat('landing/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+										"type": "Expression"
+									}
+								}
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": false,
+								"enablePartitionDiscovery": false
+							}
+						}
 					}
 				],
 				"policy": {
@@ -991,6 +1169,7 @@
 				"[concat(variables('factoryId'), '/datasets/OnPrem_Source_PostgreSql')]",
 				"[concat(variables('factoryId'), '/datasets/DS_AzureSQL_Table')]",
 				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSQL_Finance')]",
+				"[concat(variables('factoryId'), '/datasets/DS_ADLS_ControlFile')]",
 				"[concat(variables('factoryId'), '/datasets/DS_ADLS_File_Binary')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_Settlement_Intake_File')]"
 			]
@@ -1847,6 +2026,52 @@
 				"typeProperties": {}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ADLS_ControlFile')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureDataLakeStorage",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"folderPath": {
+						"type": "string"
+					},
+					"fileName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Partner Settlement Datasets"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folderPath",
+							"type": "Expression"
+						},
+						"fileSystem": "settlements"
+					},
+					"columnDelimiter": "|",
+					"escapeChar": "\\",
+					"firstRowAsHeader": false,
+					"quoteChar": ""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage')]"
+			]
 		}
 	]
 }
