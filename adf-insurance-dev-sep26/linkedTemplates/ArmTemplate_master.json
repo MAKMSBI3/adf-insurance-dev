@@ -75,6 +75,10 @@
 			"type": "string",
 			"defaultValue": "https://insurancesep26.dfs.core.windows.net/"
 		},
+		"TR_Nightly_Settlement_properties_PL_Settlement_Intake_parameters_runDate": {
+			"type": "string",
+			"defaultValue": "@formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd')"
+		},
 		"containerUri": {
 			"type": "string",
 			"metadata": "URI to storage account containing linked ARM templates"
@@ -170,6 +174,9 @@
 				"parameters": {
 					"factoryName": {
 						"value": "[parameters('factoryName')]"
+					},
+					"TR_Nightly_Settlement_properties_PL_Settlement_Intake_parameters_runDate": {
+						"value": "[parameters('TR_Nightly_Settlement_properties_PL_Settlement_Intake_parameters_runDate')]"
 					}
 				}
 			},

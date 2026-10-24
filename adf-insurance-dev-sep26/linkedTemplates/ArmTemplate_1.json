@@ -6,6 +6,10 @@
 			"type": "string",
 			"metadata": "Data Factory name",
 			"defaultValue": "adf-insurance-dev-sep26"
+		},
+		"TR_Nightly_Settlement_properties_PL_Settlement_Intake_parameters_runDate": {
+			"type": "string",
+			"defaultValue": "@formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd')"
 		}
 	},
 	"variables": {
@@ -997,6 +1001,40 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/pipelines/PL_Settlement_Intake_File')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TR_Nightly_Settlement')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "PL_Settlement_Intake",
+							"type": "PipelineReference"
+						},
+						"parameters": {
+							"runDate": "[parameters('TR_Nightly_Settlement_properties_PL_Settlement_Intake_parameters_runDate')]"
+						}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Day",
+						"interval": 1,
+						"startTime": "2026-10-24T03:21:00",
+						"endTime": "2026-10-25T03:21:00",
+						"timeZone": "India Standard Time",
+						"schedule": {}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_Settlement_Intake')]"
 			]
 		}
 	]
