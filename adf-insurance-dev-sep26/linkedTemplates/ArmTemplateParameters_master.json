@@ -56,9 +56,6 @@
 		"conn_blob_properties_typeProperties_url": {
 			"value": "https://insurancesep26.dfs.core.windows.net/"
 		},
-		"TR_Nightly_Settlement_properties_PL_Settlement_Intake_parameters_runDate": {
-			"value": "@formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd')"
-		},
 		"containerUri": {
 			"value": ""
 		},
