@@ -375,6 +375,83 @@
 					"referenceName": "LS_AzureSQL_Finance",
 					"type": "LinkedServiceReference"
 				}
+			},
+			{
+				"name": "COPY_ProcessedFile",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "SP_Reconcile",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT file_name, rows_loaded, status \nFROM fin.file_audit \nWHERE file_name LIKE '%@{formatDateTime(pipeline().parameters.runDate, 'yyyyMMdd')}%'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_AzureSQL_Table",
+						"type": "DatasetReference",
+						"parameters": {
+							"schemaName": "fin",
+							"tableName": "file_audit"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_ADLS_ControlFile",
+						"type": "DatasetReference",
+						"parameters": {
+							"folderPath": {
+								"value": "@concat('outbound/', formatDateTime(pipeline().parameters.runDate, 'yyyy/MM/dd'))",
+								"type": "Expression"
+							},
+							"fileName": {
+								"value": "@concat('_PROCESSED_', formatDateTime(pipeline().parameters.runDate, 'yyyyMMdd'), '.ctl')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
 			}
 		],
 		"parameters": {
