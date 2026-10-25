@@ -38,8 +38,8 @@
 											"dependsOn": [],
 											"policy": {
 												"timeout": "0.12:00:00",
-												"retry": 0,
-												"retryIntervalInSeconds": 30,
+												"retry": 2,
+												"retryIntervalInSeconds": 60,
 												"secureOutput": false,
 												"secureInput": false
 											},
@@ -76,6 +76,7 @@
 													"disableMetricsCollection": false
 												},
 												"enableStaging": false,
+												"enableSkipIncompatibleRow": true,
 												"translator": {
 													"type": "TabularTranslator",
 													"typeConversion": true,
@@ -123,8 +124,8 @@
 											"dependsOn": [],
 											"policy": {
 												"timeout": "0.12:00:00",
-												"retry": 0,
-												"retryIntervalInSeconds": 30,
+												"retry": 2,
+												"retryIntervalInSeconds": 60,
 												"secureOutput": false,
 												"secureInput": false
 											},
@@ -161,6 +162,7 @@
 													"disableMetricsCollection": false
 												},
 												"enableStaging": false,
+												"enableSkipIncompatibleRow": true,
 												"translator": {
 													"type": "TabularTranslator",
 													"typeConversion": true,
@@ -208,8 +210,8 @@
 											"dependsOn": [],
 											"policy": {
 												"timeout": "0.12:00:00",
-												"retry": 0,
-												"retryIntervalInSeconds": 30,
+												"retry": 2,
+												"retryIntervalInSeconds": 60,
 												"secureOutput": false,
 												"secureInput": false
 											},
@@ -246,6 +248,7 @@
 													"disableMetricsCollection": false
 												},
 												"enableStaging": false,
+												"enableSkipIncompatibleRow": true,
 												"translator": {
 													"type": "TabularTranslator",
 													"typeConversion": true,
@@ -977,7 +980,7 @@
 				"parameters": {
 					"runDate": {
 						"type": "string",
-						"defaultValue": "2026-10-11"
+						"defaultValue": "2026-10-12"
 					}
 				},
 				"variables": {
