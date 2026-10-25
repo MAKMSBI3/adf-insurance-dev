@@ -1239,6 +1239,20 @@
 												},
 												"enableStaging": false,
 												"enableSkipIncompatibleRow": true,
+												"logSettings": {
+													"enableCopyActivityLog": true,
+													"copyActivityLogSettings": {
+														"logLevel": "Warning",
+														"enableReliableLogging": true
+													},
+													"logLocationSettings": {
+														"linkedServiceName": {
+															"referenceName": "AzureDataLakeStorage",
+															"type": "LinkedServiceReference"
+														},
+														"path": "settlements/copy_logs"
+													}
+												},
 												"translator": {
 													"type": "TabularTranslator",
 													"typeConversion": true,
@@ -1325,6 +1339,20 @@
 												},
 												"enableStaging": false,
 												"enableSkipIncompatibleRow": true,
+												"logSettings": {
+													"enableCopyActivityLog": true,
+													"copyActivityLogSettings": {
+														"logLevel": "Warning",
+														"enableReliableLogging": true
+													},
+													"logLocationSettings": {
+														"linkedServiceName": {
+															"referenceName": "AzureDataLakeStorage",
+															"type": "LinkedServiceReference"
+														},
+														"path": "settlements/copy_logs"
+													}
+												},
 												"translator": {
 													"type": "TabularTranslator",
 													"typeConversion": true,
@@ -1411,6 +1439,20 @@
 												},
 												"enableStaging": false,
 												"enableSkipIncompatibleRow": true,
+												"logSettings": {
+													"enableCopyActivityLog": true,
+													"copyActivityLogSettings": {
+														"logLevel": "Warning",
+														"enableReliableLogging": true
+													},
+													"logLocationSettings": {
+														"linkedServiceName": {
+															"referenceName": "AzureDataLakeStorage",
+															"type": "LinkedServiceReference"
+														},
+														"path": "settlements/copy_logs"
+													}
+												},
 												"translator": {
 													"type": "TabularTranslator",
 													"typeConversion": true,
@@ -1578,7 +1620,8 @@
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/DS_ADLS_File_Binary')]",
 				"[concat(variables('factoryId'), '/datasets/DS_ADLS_CSV')]",
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSQL_Table')]"
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSQL_Table')]",
+				"[concat(variables('factoryId'), '/linkedServices/AzureDataLakeStorage')]"
 			]
 		},
 		{
