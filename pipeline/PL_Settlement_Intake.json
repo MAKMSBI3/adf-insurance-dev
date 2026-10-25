@@ -558,7 +558,7 @@
 		"parameters": {
 			"runDate": {
 				"type": "string",
-				"defaultValue": "2026-10-11"
+				"defaultValue": "2026-10-12"
 			}
 		},
 		"variables": {
