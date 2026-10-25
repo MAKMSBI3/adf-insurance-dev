@@ -61,6 +61,20 @@
 										},
 										"enableStaging": false,
 										"enableSkipIncompatibleRow": true,
+										"logSettings": {
+											"enableCopyActivityLog": true,
+											"copyActivityLogSettings": {
+												"logLevel": "Warning",
+												"enableReliableLogging": true
+											},
+											"logLocationSettings": {
+												"linkedServiceName": {
+													"referenceName": "AzureDataLakeStorage",
+													"type": "LinkedServiceReference"
+												},
+												"path": "settlements/copy_logs"
+											}
+										},
 										"translator": {
 											"type": "TabularTranslator",
 											"typeConversion": true,
@@ -147,6 +161,20 @@
 										},
 										"enableStaging": false,
 										"enableSkipIncompatibleRow": true,
+										"logSettings": {
+											"enableCopyActivityLog": true,
+											"copyActivityLogSettings": {
+												"logLevel": "Warning",
+												"enableReliableLogging": true
+											},
+											"logLocationSettings": {
+												"linkedServiceName": {
+													"referenceName": "AzureDataLakeStorage",
+													"type": "LinkedServiceReference"
+												},
+												"path": "settlements/copy_logs"
+											}
+										},
 										"translator": {
 											"type": "TabularTranslator",
 											"typeConversion": true,
@@ -233,6 +261,20 @@
 										},
 										"enableStaging": false,
 										"enableSkipIncompatibleRow": true,
+										"logSettings": {
+											"enableCopyActivityLog": true,
+											"copyActivityLogSettings": {
+												"logLevel": "Warning",
+												"enableReliableLogging": true
+											},
+											"logLocationSettings": {
+												"linkedServiceName": {
+													"referenceName": "AzureDataLakeStorage",
+													"type": "LinkedServiceReference"
+												},
+												"path": "settlements/copy_logs"
+											}
+										},
 										"translator": {
 											"type": "TabularTranslator",
 											"typeConversion": true,
